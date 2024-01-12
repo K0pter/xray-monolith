@@ -34,6 +34,9 @@
 #include "HUDManager.h"
 #include "WeaponMagazinedWGrenade.h"
 #include "../xrEngine/GameMtlLib.h"
+#include "VectorSpring.h"
+#include "PHDebug.h"
+
 
 #define WEAPON_REMOVE_TIME		60000
 #define ROTATION_TIME			0.25f
@@ -729,6 +732,10 @@ void CWeapon::Load(LPCSTR section)
 	m_safemode_anm[1].power = READ_IF_EXISTS(pSettings, r_float, *hud_sect, "safemode_anm_power2", 1.f);
 
 	m_shoot_shake_mat.identity();
+
+	//Make a fresh spring for the view inertia
+	InertiaSpring_View = VectorSpring::Create(.5f, 6.f);
+	InertiaSpring_View_Secondary = VectorSpring::Create(.2f, 5.5f);
 }
 
 // demonized: World model on stalkers adjustments
@@ -974,6 +981,7 @@ void CWeapon::shedule_Update(u32 dT)
 	// Queue shrink
 	//	u32	dwTimeCL		= Level().timeServer()-NET_Latency;
 	//	while ((NET.size()>2) && (NET[1].dwTimeStamp<dwTimeCL)) NET.pop_front();
+
 
 	// Inherited
 	inherited::shedule_Update(dT);
@@ -2168,6 +2176,7 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 	u8 idx = GetCurrentHudOffsetIdx();
 
 	//============= Поворот ствола во время аима =============//
+	// Rotate the barrel during aiming
 	{
 		Fvector curr_offs, curr_rot;
 
@@ -2246,7 +2255,7 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 		hud_rotation.mulA_43(hud_rotation_y);
 
 		hud_rotation.translate_over(m_hud_offset[0]);
-		trans.mulB_43(hud_rotation);
+		//trans.mulB_43(hud_rotation);
 
 		if (pActor->IsZoomAimingMode())
 			m_zoom_params.m_fZoomRotationFactor += factor;
@@ -2257,6 +2266,7 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 	}
 
 	//============= Подготавливаем общие переменные =============//
+	// Prepare common variables
 	clamp(idx, u8(0), u8(1));
 	bool bForAim = (idx == 1);
 
@@ -2264,6 +2274,7 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 	fAvgTimeDelta = _inertion(fAvgTimeDelta, Device.fTimeDelta, 0.8f);
 
 	//============= Сдвиг оружия при стрельбе =============//
+	// Weapon shift during shooting
 	if (hi->m_measures.m_shooting_params.bShootShake)
 	{
 		// Параметры сдвига
@@ -2354,6 +2365,7 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 	}
 
 	//======== Проверяем доступность инерции и стрейфа ========//
+	// Check for inertia and strafing availability
 	if (!g_player_hud->inertion_allowed())
 		return;
 
@@ -2362,6 +2374,8 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 
 	//============= Боковой стрейф с оружием =============//
 	// Рассчитываем фактор боковой ходьбы
+	// Lateral strafing with the weapon
+	// Calculate the lateral movement factor
 	float fStrafeMaxTime = hi->m_measures.m_strafe_offset[2][idx].y;
 	// Макс. время в секундах, за которое мы наклонимся из центрального положения
 	if (fStrafeMaxTime <= EPS)
@@ -2406,6 +2420,7 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 			clamp(m_fLR_CameraFactor, 0.0f, fCamLimitBlend);
 		}
 	}
+
 
 	// Добавляем боковой наклон от ходьбы вбок
 	float fChangeDirSpeedMod = 3;
@@ -2492,7 +2507,7 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 		hud_rotation.mulA_43(hud_rotation_y);
 
 		hud_rotation.translate_over(curr_offs);
-		trans.mulB_43(hud_rotation);
+		//trans.mulB_43(hud_rotation);
 	}
 
 	//============= Инерция оружия =============//
@@ -2599,13 +2614,106 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 	float fLR_lim = (m_fLR_InertiaFactor < 0.0f ? vIOffsets.x : vIOffsets.y);
 	float fUD_lim = (m_fUD_InertiaFactor < 0.0f ? vIOffsets.z : vIOffsets.w);
 
-	Fvector curr_offs;
-	curr_offs = {fLR_lim * -1.f * m_fLR_InertiaFactor, fUD_lim * m_fUD_InertiaFactor, 0.0f};
 
-	Fmatrix hud_rotation;
-	hud_rotation.identity();
-	hud_rotation.translate_over(curr_offs);
-	trans.mulB_43(hud_rotation);
+	//Set up our inertia pivot 
+	Fmatrix inertiaPivot;
+	inertiaPivot.identity();
+
+	//Slightly forward, and down to the right (left, up, fwd)
+	//(forward??,backward??,left)
+	Fvector pivotOffset = Fvector().set(0, 0, 1);
+
+	//Add view delta as force into view spring
+	if (InertiaSpring_View && InertiaSpring_View_Secondary)
+	{
+		//Add on a force to our view spring based on how the view was rotated
+		InertiaSpring_View->AddImpulse(Fvector().set(fYMag, -fPMag, 0).mul(.75 * Device.fTimeDelta));
+		InertiaSpring_View->Update(Device.fTimeDelta);
+
+		const Fvector springResult = InertiaSpring_View->GetResult();
+		const Fvector springVel = InertiaSpring_View->GetVelocity();
+
+
+		InertiaSpring_View_Secondary->AddImpulse(Fvector().set(springVel.x, springVel.y, springVel.z).mul(1. * Device.fTimeDelta));
+		InertiaSpring_View_Secondary->Update(Device.fTimeDelta);
+		const Fvector springResult_Secondary = InertiaSpring_View_Secondary->GetResult();
+
+		//Get our spring result and use that as the rotation direction of our pivot
+		Fmatrix offset; offset.identity();
+
+		//(yaw,pitch,roll) (left, up, right)
+		const Fvector rot = Fvector().set(-springResult.x, springResult.y, springResult_Secondary.x * 2.);
+
+		offset.setHPB(rot.x, rot.y, rot.z);
+		offset.translate_over(pivotOffset);
+
+		inertiaPivot.mulB_43(offset);
+	}
+
+	Fvector d_origin = Fvector().set(0, 1, 0);
+	Fvector d_bounds = Fvector().set(.2,.2,.2);
+	u32 d_color = color_xrgb(255, 0, 0);
+
+	använd istället
+	Level().debug_renderer().draw_<something>
+	
+
+	funkar inte..
+#ifdef DEBUG
+	DBG_DrawAABB(d_origin, d_bounds, d_color);
+	DBG_DrawPoint(d_origin, 0.05, d_color); // Fvector pos, float size, u32 color
+#endif
+
+	Fmatrix localPivotOffset;
+	localPivotOffset.identity();
+
+	//float xx, yy, zz;
+	//inertiaPivot.getXYZi(xx, yy, zz); //Get the locational offset from our pivot, and invert it
+	localPivotOffset.translate_over(Fvector().set(pivotOffset).mul(-1.)); //Apply that to our local offset to place it "back onto the pivot"
+
+	Fmatrix A = Fmatrix(localPivotOffset);
+	Fmatrix B = Fmatrix(inertiaPivot);
+
+
+	Fmatrix finalTransform; 
+	finalTransform.identity(); 
+	//finalTransform.mul_43(A, B);
+	finalTransform = VectorSpring::compose(A, B);
+
+	trans.mulB_43(finalTransform);
+	//trans.mulB_43(inertiaPivot);
+
+
+	//Debug print matrix stuff
+	Fmatrix& dpm = inertiaPivot;
+
+	Fvector d_loc;
+	dpm.getXYZ(d_loc);
+
+	
+
+	Fvector d_rf, d_rr, d_ru;
+	d_rf = Fvector().set(dpm.m[0][0], dpm.m[0][1], dpm.m[0][2]).normalize();
+	d_ru = Fvector().set(dpm.m[1][0], dpm.m[1][1], dpm.m[1][2]).normalize();
+	d_rr = Fvector().set(dpm.m[2][0], dpm.m[2][1], dpm.m[2][2]).normalize();
+
+	Msg("Pos (%f,%f,%f) Rot::Fwd (%f,%f,%f) Right (%f,%f,%f) Up (%f,%f,%f)", d_loc.x, d_loc.y, d_loc.z, d_rf.x, d_rf.y, d_rf.z, d_rr.x, d_rr.y, d_rr.z, d_ru.x, d_ru.y, d_ru.z);
+
+	//Msg("Local pivot (%f,%f,%f)", debug_Offset.x, debug_Offset.y, debug_Offset.z);
+
+
+
+
+
+	//Old approach
+	//Fvector curr_offs = Fvector();
+	//curr_offs = {fLR_lim * -1.f * m_fLR_InertiaFactor, fUD_lim * m_fUD_InertiaFactor, 0.0f};
+
+	//Fmatrix hud_rotation;
+	//hud_rotation.identity();
+	//hud_rotation.translate_over(curr_offs);
+
+	//trans.mulB_43(hud_rotation);
 }
 
 // Добавить эффект сдвига оружия от выстрела

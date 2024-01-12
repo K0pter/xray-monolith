@@ -16,6 +16,9 @@
 
 #include "NewZoomFlag.h"
 
+
+class VectorSpring;
+
 class CEntity;
 class ENGINE_API CMotionDef;
 class CSE_ALifeItemWeapon;
@@ -1086,4 +1089,8 @@ public:
 	};
     
     float SDS_Radius(bool alt = false);
+
+public:
+	VectorSpring* InertiaSpring_View;
+	VectorSpring* InertiaSpring_View_Secondary;
 };

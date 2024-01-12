@@ -137,6 +137,12 @@
       <ImportLibrary>$(xrLibDir)$(TargetName).lib</ImportLibrary>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PostBuildEvent>
+      <Command>
+      </Command>
+      <Message>
+      </Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='VerifiedDX11|x64'">
     <Midl>
@@ -184,6 +190,12 @@
       <ImportLibrary>$(xrLibDir)$(TargetName).lib</ImportLibrary>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PostBuildEvent>
+      <Command>
+      </Command>
+      <Message>
+      </Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Verified|x64'">
     <Midl>
@@ -231,6 +243,12 @@
       <ImportLibrary>$(xrLibDir)$(TargetName).lib</ImportLibrary>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PostBuildEvent>
+      <Command>
+      </Command>
+      <Message>
+      </Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release-AVX|x64'">
     <Midl>
@@ -275,9 +293,16 @@
       <ImportLibrary>$(xrLibDir)$(TargetName).lib</ImportLibrary>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
+    <PostBuildEvent>
+      <Command>
+      </Command>
+      <Message>
+      </Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="..\..\xrCore\ChooseTypes.H" />
+    <ClInclude Include="..\..\xrGame\VectorSpring.h" />
     <ClInclude Include="..\..\xrServerEntities\ai_sounds.h" />
     <ClInclude Include="..\..\xrServerEntities\alife_human_brain.h" />
     <ClInclude Include="..\..\xrServerEntities\alife_human_brain_inline.h" />
@@ -1919,6 +1944,7 @@
     <ClInclude Include="..\ZudaArtifact.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\xrGame\VectorSpring.cpp" />
     <ClCompile Include="..\..\xrServerEntities\alife_human_brain.cpp" />
     <ClCompile Include="..\..\xrServerEntities\alife_monster_brain.cpp" />
     <ClCompile Include="..\..\xrServerEntities\alife_space.cpp" />
