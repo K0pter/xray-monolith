@@ -2148,6 +2148,11 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 	attachable_hud_item* hi = HudItemData();
 	R_ASSERT(hi);
 
+	Msg("Stop here.");
+
+
+	return;
+
 	/*PP.RQ.O = 0;
 	PP.RQ.range = 3.f;
 	PP.RQ.element = -1;
@@ -2652,17 +2657,11 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 
 	Fvector d_origin = Fvector().set(0, 1, 0);
 	Fvector d_bounds = Fvector().set(.2,.2,.2);
-	u32 d_color = color_xrgb(255, 0, 0);
+	u32 d_color_a = color_xrgb(255, 0, 0);
+	u32 d_color_b = color_xrgb(0, 255, 0);
 
-	använd istället
-	Level().debug_renderer().draw_<something>
-	
 
-	funkar inte..
-#ifdef DEBUG
-	DBG_DrawAABB(d_origin, d_bounds, d_color);
-	DBG_DrawPoint(d_origin, 0.05, d_color); // Fvector pos, float size, u32 color
-#endif
+
 
 	Fmatrix localPivotOffset;
 	localPivotOffset.identity();
@@ -2682,6 +2681,40 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 
 	trans.mulB_43(finalTransform);
 	//trans.mulB_43(inertiaPivot);
+
+
+
+
+
+
+
+
+
+
+	Fmatrix Ta, Tb, Tc;
+	Ta.identity();
+	Tb.identity();
+
+	Tb.translate_over(Fvector().set(0,0,1));
+
+	Tb = VectorSpring::compose(Ta, Tb);
+
+	Tc = Fmatrix().mul_43(Ta, Tb);
+
+
+	//Debug draw our matrix comp result
+	Level().debug_renderer().draw_obb(Tb, d_color_a, false);
+	Level().debug_renderer().draw_obb(Tc, d_color_b, false);
+
+
+
+
+
+
+
+
+
+
 
 
 	//Debug print matrix stuff
