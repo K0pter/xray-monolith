@@ -2148,11 +2148,6 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 	attachable_hud_item* hi = HudItemData();
 	R_ASSERT(hi);
 
-	Msg("Stop here.");
-
-
-	return;
-
 	/*PP.RQ.O = 0;
 	PP.RQ.range = 3.f;
 	PP.RQ.element = -1;
@@ -2177,6 +2172,7 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 
 	//Msg("RQ range: %f", PP.RQ.range);
 	*/
+
 
 	u8 idx = GetCurrentHudOffsetIdx();
 
@@ -2260,7 +2256,13 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 		hud_rotation.mulA_43(hud_rotation_y);
 
 		hud_rotation.translate_over(m_hud_offset[0]);
-		//trans.mulB_43(hud_rotation);
+		
+		
+		
+		//HAD THIS DISABLED BEFORE
+		trans.mulB_43(hud_rotation);
+
+
 
 		if (pActor->IsZoomAimingMode())
 			m_zoom_params.m_fZoomRotationFactor += factor;
@@ -2269,6 +2271,20 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 
 		clamp(m_zoom_params.m_fZoomRotationFactor, 0.f, 1.f);
 	}
+
+
+
+	//Get ads POS offset
+	//Fvector aimOffset = Fvector().set(g_player_hud->m_adjust_offset[0][1]);
+	Fvector aimOffset = Fvector().set(hi->m_measures.m_hands_offset[0][1]);
+
+	//Shift pivot's "depth" position forwards as we enter ADS, to match ADS offset
+	//This ensures we're pivoting "around" the sight
+	//NOTE: Currently just using the factor param from above, should probably add a separate ADS weight parameter eventually to lerp all of the ADS-related logic
+	aimOffset.z = _lerp(-.2f, hi->m_measures.m_hands_offset[0][1].z, m_zoom_params.m_fZoomRotationFactor);
+
+
+
 
 	//============= Подготавливаем общие переменные =============//
 	// Prepare common variables
@@ -2466,7 +2482,8 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 	clamp(fLR_Factor, -1.0f, 1.0f); // Фактор боковой ходьбы не должен превышать эти лимиты
 
 	// Производим наклон ствола для нормального режима и аима
-	for (int _idx = 0; _idx <= 1; _idx++) //<-- Для плавного перехода
+	// We tilt the barrel for normal mode and aim
+	for (int _idx = 0; _idx <= 1; _idx++) //<-- Для плавного перехода (For a smooth transition)
 	{
 		bool bEnabled = (hi->m_measures.m_strafe_offset[2][_idx].x != 0.0f);
 		if (!bEnabled)
@@ -2620,13 +2637,17 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 	float fUD_lim = (m_fUD_InertiaFactor < 0.0f ? vIOffsets.z : vIOffsets.w);
 
 
-	//Set up our inertia pivot 
-	Fmatrix inertiaPivot;
-	inertiaPivot.identity();
 
-	//Slightly forward, and down to the right (left, up, fwd)
-	//(forward??,backward??,left)
-	Fvector pivotOffset = Fvector().set(0, 0, 1);
+	//(Right, Up, Fwd)
+	Fvector pivotOffset = Fvector().set(-aimOffset.x, -aimOffset.y, -aimOffset.z);
+	//Fvector pivotOffset = Fvector().set(0.08f, 0.02f, .5f);
+
+	//Set up our inertia pivot 
+	Fmatrix inertiaPivot; inertiaPivot.identity();
+	
+	Fmatrix localOffset; localOffset.identity();
+	localOffset.translate_over(Fvector().set(pivotOffset).mul(-1.f)); //This "locally" moves model back into proper place, and properly positions pivot
+
 
 	//Add view delta as force into view spring
 	if (InertiaSpring_View && InertiaSpring_View_Secondary)
@@ -2643,110 +2664,87 @@ void CWeapon::UpdateHudAdditional(Fmatrix& trans)
 		InertiaSpring_View_Secondary->Update(Device.fTimeDelta);
 		const Fvector springResult_Secondary = InertiaSpring_View_Secondary->GetResult();
 
-		//Get our spring result and use that as the rotation direction of our pivot
-		Fmatrix offset; offset.identity();
 
 		//(yaw,pitch,roll) (left, up, right)
 		const Fvector rot = Fvector().set(-springResult.x, springResult.y, springResult_Secondary.x * 2.);
 
-		offset.setHPB(rot.x, rot.y, rot.z);
-		offset.translate_over(pivotOffset);
-
-		inertiaPivot.mulB_43(offset);
+		inertiaPivot.setHPB(rot.x, rot.y, rot.z);
+		inertiaPivot.translate_over(pivotOffset);
 	}
 
-	Fvector d_origin = Fvector().set(0, 1, 0);
-	Fvector d_bounds = Fvector().set(.2,.2,.2);
+	//Transform "locally" from there to reset screen-positioning
+	localOffset.mulA_43(inertiaPivot);
+
+
+	////////////// TEMP MOVE TO LATER STAGE TO ADD IN ADS
+	/*
+	//Submit back to weapon offset result
+	trans.mulB_43(localOffset);
+	*/
+	//////////////
+
+	
+	//Debug draw our matrix comp result
 	u32 d_color_a = color_xrgb(255, 0, 0);
 	u32 d_color_b = color_xrgb(0, 255, 0);
+	u32 d_color_c = color_xrgb(0, 0, 255);
 
-
-
-
-	Fmatrix localPivotOffset;
-	localPivotOffset.identity();
-
-	//float xx, yy, zz;
-	//inertiaPivot.getXYZi(xx, yy, zz); //Get the locational offset from our pivot, and invert it
-	localPivotOffset.translate_over(Fvector().set(pivotOffset).mul(-1.)); //Apply that to our local offset to place it "back onto the pivot"
-
-	Fmatrix A = Fmatrix(localPivotOffset);
-	Fmatrix B = Fmatrix(inertiaPivot);
-
-
-	Fmatrix finalTransform; 
-	finalTransform.identity(); 
-	//finalTransform.mul_43(A, B);
-	finalTransform = VectorSpring::compose(A, B);
-
-	trans.mulB_43(finalTransform);
-	//trans.mulB_43(inertiaPivot);
-
-
-
-
-
-
-
-
-
-
-	Fmatrix Ta, Tb, Tc;
+	/*
+	Fmatrix Ta, Tb;
 	Ta.identity();
 	Tb.identity();
 
-	Tb.translate_over(Fvector().set(0,0,1));
-
-	Tb = VectorSpring::compose(Ta, Tb);
-
-	Tc = Fmatrix().mul_43(Ta, Tb);
+	Tb.translate_over(Fvector().set(0, 1.f + sin(Device.fTimeGlobal) * .5f,0));
 
 
-	//Debug draw our matrix comp result
-	Level().debug_renderer().draw_obb(Tb, d_color_a, false);
-	Level().debug_renderer().draw_obb(Tc, d_color_b, false);
+	Ta.setHPB(Fvector().set(0, sin(Device.fTimeGlobal) * .5f, 0));
+	Ta.translate_over(Fvector().set(.5f, 0, sin(Device.fTimeGlobal) * .5f));
 
 
+	//Tc = Fmatrix().mul_43(Ta, Tb);
+	Level().debug_renderer().draw_obb(Ta, Fvector().set(.1f, .1f, .1f), d_color_a, false);
+	Level().debug_renderer().draw_obb(Tb, Fvector().set(.1f, .1f, .1f), d_color_b, false);
 
-
-
-
-
-
-
-
-
-
-	//Debug print matrix stuff
-	Fmatrix& dpm = inertiaPivot;
-
-	Fvector d_loc;
-	dpm.getXYZ(d_loc);
-
+	//Multiply b into a-space
+	Tb.mulA_43(Ta);
 	
 
-	Fvector d_rf, d_rr, d_ru;
-	d_rf = Fvector().set(dpm.m[0][0], dpm.m[0][1], dpm.m[0][2]).normalize();
-	d_ru = Fvector().set(dpm.m[1][0], dpm.m[1][1], dpm.m[1][2]).normalize();
-	d_rr = Fvector().set(dpm.m[2][0], dpm.m[2][1], dpm.m[2][2]).normalize();
+	//Draw result
+	Level().debug_renderer().draw_obb(Tb, Fvector().set(.1f, .1f, .1f), d_color_c, false);
+	*/
+	
+	//Draws in camera-space our pivot offset
+	Fmatrix tm;
+	tm.identity();
+	tm.translate_over(pivotOffset.mul(1.f,1.f,1.f));
+	tm.mulA_43(g_player_hud->m_transform);
 
-	Msg("Pos (%f,%f,%f) Rot::Fwd (%f,%f,%f) Right (%f,%f,%f) Up (%f,%f,%f)", d_loc.x, d_loc.y, d_loc.z, d_rf.x, d_rf.y, d_rf.z, d_rr.x, d_rr.y, d_rr.z, d_ru.x, d_ru.y, d_ru.z);
+	//Hud camera transform
+	Level().debug_renderer().draw_obb(g_player_hud->m_transform, Fvector().set(.01f, .01f, .01f), d_color_a, true);
 
-	//Msg("Local pivot (%f,%f,%f)", debug_Offset.x, debug_Offset.y, debug_Offset.z);
-
-
-
+	//Inertia pivot
+	Level().debug_renderer().draw_obb(tm, Fvector().set(.01f, .01f, .01f), d_color_b, true);
+	
 
 
 	//Old approach
-	//Fvector curr_offs = Fvector();
-	//curr_offs = {fLR_lim * -1.f * m_fLR_InertiaFactor, fUD_lim * m_fUD_InertiaFactor, 0.0f};
+	/*
+	Fvector curr_offs = Fvector();
+	curr_offs = {fLR_lim * -1.f * m_fLR_InertiaFactor, fUD_lim * m_fUD_InertiaFactor, 0.0f};
 
-	//Fmatrix hud_rotation;
-	//hud_rotation.identity();
-	//hud_rotation.translate_over(curr_offs);
+	Fmatrix hud_rotation;
+	hud_rotation.identity();
+	hud_rotation.translate_over(curr_offs);
 
-	//trans.mulB_43(hud_rotation);
+	trans.mulB_43(hud_rotation);
+	*/
+
+	//localOffset.mulB_43(hud_rotation);
+
+
+	//Submit back to weapon offset result
+	trans.mulB_43(localOffset);
+
 }
 
 // Добавить эффект сдвига оружия от выстрела

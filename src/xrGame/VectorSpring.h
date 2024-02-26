@@ -42,53 +42,6 @@ public:
 
 	//This is good if you want this spring to act more as a "direction" 
 	bool NormalizeResult;
-
-
-
-	// Composes the two supplied matrices (Fist combine rotations, then multiply B's position by that result)
-	static Fmatrix& compose(const Fmatrix& A, const Fmatrix& B)
-	{
-		//Resulting composed matrix
-		Fmatrix cm;
-
-		//First combine rotations
-		cm.m[0][0] = A.m[0][0] * B.m[0][0] + A.m[1][0] * B.m[0][1] + A.m[2][0] * B.m[0][2];
-		cm.m[0][1] = A.m[0][1] * B.m[0][0] + A.m[1][1] * B.m[0][1] + A.m[2][1] * B.m[0][2];
-		cm.m[0][2] = A.m[0][2] * B.m[0][0] + A.m[1][2] * B.m[0][1] + A.m[2][2] * B.m[0][2];
-		cm.m[0][3] = 0;
-
-		cm.m[1][0] = A.m[0][0] * B.m[1][0] + A.m[1][0] * B.m[1][1] + A.m[2][0] * B.m[1][2];
-		cm.m[1][1] = A.m[0][1] * B.m[1][0] + A.m[1][1] * B.m[1][1] + A.m[2][1] * B.m[1][2];
-		cm.m[1][2] = A.m[0][2] * B.m[1][0] + A.m[1][2] * B.m[1][1] + A.m[2][2] * B.m[1][2];
-		cm.m[1][3] = 0;
-
-		cm.m[2][0] = A.m[0][0] * B.m[2][0] + A.m[1][0] * B.m[2][1] + A.m[2][0] * B.m[2][2];
-		cm.m[2][1] = A.m[0][1] * B.m[2][0] + A.m[1][1] * B.m[2][1] + A.m[2][1] * B.m[2][2];
-		cm.m[2][2] = A.m[0][2] * B.m[2][0] + A.m[1][2] * B.m[2][1] + A.m[2][2] * B.m[2][2];
-		cm.m[2][3] = 0;
-
-		//Now we multiply the "child" matrix position by the combined rotation
-		cm.m[3][0] =  (A.m[3][0] * cm.m[0][0]) + (A.m[3][0] * cm.m[1][0]) + (A.m[3][0] * cm.m[2][0]);
-		cm.m[3][1] =  (A.m[3][1] * cm.m[1][0]) + (A.m[3][1] * cm.m[1][1]) + (A.m[3][1] * cm.m[1][2]);
-		cm.m[3][2] =  (A.m[3][2] * cm.m[2][0]) + (A.m[3][2] * cm.m[2][1]) + (A.m[3][2] * cm.m[2][2]);
-		
-		//cm.m[3][0] = A.m[3][0] * (cm.m[0][0] + cm.m[1][0] + cm.m[2][0]);
-		//cm.m[3][1] = A.m[3][1] * (cm.m[1][0] + cm.m[1][1] + cm.m[1][2]);
-		//cm.m[3][2] = A.m[3][2] * (cm.m[2][0] + cm.m[2][1] + cm.m[2][2]);
-		
-		
-		
-		cm.m[3][3] = 1;
-
-
-
-		//Offset by parent's base position
-		cm.m[3][0] += B.m[3][0];
-		cm.m[3][1] += B.m[3][1];
-		cm.m[3][2] += B.m[3][2];
-
-		return cm;
-	}
 };
 
 
